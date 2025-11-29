@@ -1,0 +1,4 @@
+[tool.poetry]
+name = "code-reviewer-agent"
+version = "0.1.0"
+description = "Code reviewer agent skeleton"

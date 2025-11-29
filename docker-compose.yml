@@ -1,0 +1,151 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: code_reviews
+      POSTGRES_USER: reviewer
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reviewer"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Main API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - REDIS_HOST=redis
+      - DATABASE_URL=postgresql://reviewer:${DB_PASSWORD:-changeme}@postgres:5432/code_reviews
+      - ENVIRONMENT=production
+    volumes:
+      - ./rag/data:/app/rag/data
+      - chroma_data:/app/chroma_db
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+  # Streamlit UI
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    command: streamlit run ui/app.py --server.port 8501
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+volumes:
+  redis_data:
+  postgres_data:
+  chroma_data:
+  prometheus_data:
+
+---
+# .env.example
+# Copy this to .env and fill in your values
+
+# Required: API Keys
+ANTHROPIC_API_KEY=sk-ant-xxx
+OPENAI_API_KEY=sk-xxx
+
+# Optional: GitHub Integration
+GITHUB_TOKEN=ghp_xxx
+GITLAB_TOKEN=glpat-xxx
+
+# Database
+DB_PASSWORD=secure_password_here
+
+# Application
+ENVIRONMENT=production
+DEBUG=false
+LOG_LEVEL=INFO
+
+# LLM Configuration
+PRIMARY_LLM=claude-sonnet-4-20250514
+FALLBACK_LLM=gpt-4-turbo
+TEMPERATURE=0.1
+MAX_TOKENS=4096
+
+# Cost Management
+COST_LIMIT_PER_REVIEW=1.0
+ENABLE_COST_TRACKING=true
+CACHE_TTL=3600
+
+# Webhooks
+WEBHOOK_SECRET=your-webhook-secret
+ENABLE_WEBHOOKS=true
+
+---
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/chroma_db /app/logs
+
+# Expose ports
+EXPOSE 8000 8501
+
+# Default command (can be overridden in docker-compose)
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
