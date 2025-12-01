@@ -1,6 +1,47 @@
-fastapi
-uvicorn
-sqlalchemy
-alembic
-pytest
-python-dotenv
+# Core LangGraph & LangChain
+langgraph==0.2.28
+langchain==0.3.0
+langchain-community==0.3.0
+
+# AWS Bedrock Support
+boto3==1.34.0
+botocore==1.34.0
+
+# Azure OpenAI Support
+openai==1.54.0  # Updated for Azure support
+
+# Vector Store & RAG
+chromadb==0.4.22
+
+# Caching
+redis==5.0.1
+
+# Web Framework
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.6.0
+pydantic-settings==2.1.0
+
+# UI
+streamlit==1.31.0
+
+# GitHub/GitLab Integration (Optional)
+pygithub==2.1.1
+gitpython==3.1.41
+
+# Utilities
+tiktoken==0.5.2
+python-dotenv==1.0.0
+aiohttp==3.9.3
+
+# Database
+sqlalchemy==2.0.25
+alembic==1.13.1
+
+# Monitoring
+prometheus-client==0.19.0
+structlog==24.1.0
+
+# Static Analysis (Optional - these are local tools)
+# ruff==0.2.0  # Install separately if needed
+# semgrep==1.60.1  # Install separately if needed
